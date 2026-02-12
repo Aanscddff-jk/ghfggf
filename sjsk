@@ -1,0 +1,34 @@
+-- إنشاء ScreenGui و Button
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local button = Instance.new("TextButton")
+button.Parent = screenGui
+button.Size = UDim2.new(0, 200, 0, 50)  -- حجم الزر
+button.Position = UDim2.new(0.5, -100, 0.5, -25)  -- مكان الزر في الشاشة
+button.Text = "Toggle On/Off"  -- نص الزر
+button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- لون خلفية الزر
+button.TextColor3 = Color3.fromRGB(255, 255, 255)  -- لون النص
+
+-- الكود الذي طلبته
+local args = {3500000}
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local addCoinsEvent = ReplicatedStorage:WaitForChild("ReplicatedStorageHolders"):WaitForChild("Events"):WaitForChild("AddCoins")
+
+local isOn = false
+
+button.MouseButton1Click:Connect(function()
+    isOn = not isOn  -- التبديل بين on و off
+    
+    -- تغيير لون الزر بناءً على الحالة
+    if isOn then
+        button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- تغيير اللون إلى الأخضر عند التفعيل
+        -- عند تفعيل الزر (on)
+        while isOn do
+            addCoinsEvent:FireServer(unpack(args))  -- إرسال الـ 3500000
+            wait(0.1)  -- الانتظار لمدة 0.1 ثانية قبل التكرار
+        end
+    else
+        button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- إعادة اللون إلى الأحمر عند الإيقاف
+    end
+end)
