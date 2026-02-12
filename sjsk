@@ -1,22 +1,141 @@
--- 
-local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
+local PlayerGui = LP:WaitForChild("PlayerGui")
+local RunService = game:GetService("RunService")
 
-local button = Instance.new("TextButton")
-button.Parent = 
-button.Size = UDim2.new(0, 200, 0, 50)  -- حجم الزر
-button
-    isOn = not isOn  -- التبديل بين on و off
-    
-    -- تغيير لون الزر بناءً على الحالة
-    if isOn then
-        button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- تغيير اللون إلى الأخضر عند التفعيل
-        -- عند تفعيل الزر (on)
-        while isOn do
-            addCoinsEvent:FireServer(unpack(args))  -- إرسال الـ 3500000
-            wait(0.1)  -- الانتظار لمدة 0.1 ثانية قبل التكرار
+local RemoteEvents = {}
+local CuffedTargets = {}
+local Active = false -- الزر OFF بالافتراض
+
+-- تحديث RemoteEvents
+local function UpdateRemoteEvents()
+    RemoteEvents = {}
+    for _, plr in pairs(Players:GetPlayers()) do
+        for _, tool in pairs(plr.Backpack:GetChildren()) do
+            local re = tool:FindFirstChildWhichIsA("RemoteEvent")
+            if re then table.insert(RemoteEvents, re) end
         end
-    else
-        button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- إعادة اللون إلى الأحمر عند الإيقاف
+        if plr.Character then
+            for _, tool in pairs(plr.Character:GetChildren()) do
+                local re = tool:FindFirstChildWhichIsA("RemoteEvent")
+                if re then table.insert(RemoteEvents, re) end
+            end
+        end
     end
+end
+
+-- كبش / فك لاعب
+local function ToggleCuff(target)
+    if not target or not target.Character then return end
+    local hrp = target.Character:FindFirstChild("HumanoidRootPart") or target.Character:FindFirstChild("Torso")
+    if not hrp then return end
+    UpdateRemoteEvents()
+    local isCuffed = table.find(CuffedTargets, target)
+    if isCuffed then
+        for _, re in pairs(RemoteEvents) do pcall(function() re:FireServer("UnCuff") end) end
+        table.remove(CuffedTargets, isCuffed)
+    else
+        for _, re in pairs(RemoteEvents) do pcall(function() re:FireServer("Cuff", hrp) end) end
+        table.insert(CuffedTargets, target)
+    end
+end
+
+-- فك كل اللاعبين
+local function UncuffAll()
+    UpdateRemoteEvents()
+    for _, re in pairs(RemoteEvents) do
+        pcall(function() re:FireServer("UnCuff") end)
+    end
+    CuffedTargets = {}
+end
+
+-- GUI
+local Gui = Instance.new("ScreenGui", PlayerGui)
+Gui.ResetOnSpawn = false
+
+-- زر ON/OFF
+local Btn = Instance.new("TextButton", Gui)
+Btn.Size = UDim2.fromOffset(120,50)
+Btn.Position = UDim2.new(1, -170, 0, 50) -- على يمين الشاشة
+Btn.Text = "OFF"
+Btn.TextScaled = true
+Btn.BackgroundColor3 = Color3.fromRGB(255,0,0)
+Btn.BackgroundTransparency = 0.3
+Btn.TextColor3 = Color3.fromRGB(255,255,255)
+
+-- تأثير Hover
+Btn.MouseEnter:Connect(function() Btn.BackgroundTransparency = 0 end)
+Btn.MouseLeave:Connect(function() Btn.BackgroundTransparency = 0.3 end)
+
+-- عداد اللاعبين المكلبشين
+local CountLabel = Instance.new("TextLabel", Gui)
+CountLabel.Size = UDim2.fromOffset(40,40)
+CountLabel.Position = Btn.Position + UDim2.new(0, -50, 0, 5)
+CountLabel.Text = "0"
+CountLabel.TextScaled = true
+CountLabel.BackgroundTransparency = 0.5
+CountLabel.BackgroundColor3 = Color3.fromRGB(30,30,30)
+CountLabel.TextColor3 = Color3.fromRGB(255,255,255)
+
+-- زر UNCUFF ALL
+local UncuffBtn = Instance.new("TextButton", Gui)
+UncuffBtn.Size = UDim2.fromOffset(120,40)
+UncuffBtn.Position = Btn.Position + UDim2.new(0,0,0,60)
+UncuffBtn.Text = "UNCUFF ALL"
+UncuffBtn.TextScaled = true
+UncuffBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+UncuffBtn.BackgroundTransparency = 0.3
+UncuffBtn.TextColor3 = Color3.fromRGB(255,255,255)
+
+UncuffBtn.MouseEnter:Connect(function() UncuffBtn.BackgroundTransparency = 0 end)
+UncuffBtn.MouseLeave:Connect(function() UncuffBtn.BackgroundTransparency = 0.3 end)
+
+-- سحب الزر مع العدادات
+local dragging, dragStart, startPos
+Btn.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = i.Position
+        startPos = Btn.Position
+        i.Changed:Connect(function()
+            if i.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+Btn.InputChanged:Connect(function(i)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = i.Position - dragStart
+        Btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        CountLabel.Position = Btn.Position + UDim2.new(0, -50, 0, 5)
+        UncuffBtn.Position = Btn.Position + UDim2.new(0, 0, 0, 60)
+    end
+end)
+
+-- تبديل ON/OFF
+Btn.MouseButton1Click:Connect(function()
+    Active = not Active
+    Btn.Text = Active and "ON" or "OFF"
+    Btn.BackgroundColor3 = Active and Color3.fromRGB(0,200,0) or Color3.fromRGB(255,0,0)
+end)
+
+-- كبش عند الضغط على لاعب إذا الزر ON
+Mouse.Button1Down:Connect(function()
+    if not Active then return end
+    local target = Mouse.Target
+    if not target then return end
+    local char = target:FindFirstAncestorOfClass("Model")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local plr = Players:GetPlayerFromCharacter(char)
+    if not plr or plr == LP then return end
+    ToggleCuff(plr)
+end)
+
+-- زر فك الكلبشة عن الكل
+UncuffBtn.MouseButton1Click:Connect(UncuffAll)
+
+-- تحديث العداد باستمرار
+RunService.RenderStepped:Connect(function()
+    CountLabel.Text = tostring(#CuffedTargets)
 end)
